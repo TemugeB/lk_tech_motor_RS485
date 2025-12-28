@@ -71,6 +71,9 @@ class MotorDriver:
     def stop_motor(self, command = 0x81):
         return self._send_command_with_payload(command)
 
+    def clear_errors(self, command = 0x9B):
+        return self._send_command_with_payload(command)
+
     def set_speed(self, output_degrees_per_second, command = 0xA2):
         """
         CMD 0xA2: Sets the target speed for the output shaft.
@@ -96,7 +99,23 @@ class MotorDriver:
         
         #parse the response data
         # Temp (1b), IQ (2b), Speed (2b), Encoder (2b)
-        
+        temp = struct.unpack('<b', bytes([response_data[0]]))[0]
+        iq_raw = int.from_bytes(response_data[1:3], byteorder='little', signed=True)
+        speed_raw = int.from_bytes(response_data[3:5], byteorder='little', signed=True)
+        encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=True)
+
+        #convert to human readable
+        iq_amps = (iq_raw/2048.0) * 33.0 #amps
+
+        #output speed feedback
+        output_speed_feedback = speed_raw / self.REDUCTION_RATIO
+
+        return {
+            "temp_c": temp,
+            "torque_current_amps": round(iq_amps, 2),
+            "output_speed_dps": round(output_speed_feedback, 2),
+            "encoder_position": encoder_raw
+            }
 
     def get_current_single_loop_angle(self, command = 0x94):
 
@@ -151,10 +170,11 @@ if __name__ == '__main__':
             motor_driver.enable_motor()
 
             #spin the motor
-            rot_speed = 10.0
+            rot_speed = -150.0
             print(f'Spinning the motor at {rot_speed} degrees per second.')
-            motor_driver.set_speed(rot_speed)
-            time.sleep(3)
+            response = motor_driver.set_speed(rot_speed)
+            print(response)
+            time.sleep(10)
 
             #send stop
             motor_driver.stop_motor()
