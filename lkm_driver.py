@@ -22,6 +22,7 @@ class MotorDriver:
         #attempt to connect to the motor via serial
         try:
             self.serial = serial.Serial(self.SERIAL_PORT, self.BAUDRATE, timeout = 0.1)
+            self.serial.reset_input_buffer()
         except Exception as e:
             print(f'Exception: {e}')
 
@@ -117,12 +118,71 @@ class MotorDriver:
             "encoder_position": encoder_raw
             }
 
-    def get_current_single_loop_angle(self, command = 0x94):
+    def set_position(self, target_angle_deg, max_speed_dps = 100, command = 0xA4):
+
+        """
+        max_speed_dps = max angular velocity given in [degrees per second]
+        """
+        if max_speed_dps < 0:
+            raise ValueError('Angular speed must be positive value')
+
+        #The motor accepts angles in units of 0.01 degrees.
+        #The motor expects int64_t for the angle
+        target_raw = int(target_angle_deg * self.REDUCTION_RATIO * 100)
+
+        #max speed is given as uint32_t
+        speed_limit_raw = int(max_speed_dps * self.REDUCTION_RATIO *100)
+
+        #prepare the payload
+        #int64_t (8 bytes) + uint32_t (4 bytes)
+        payload_out = struct.pack('<qI', target_raw, speed_limit_raw)
+
+        # send and receive response (13 bytes total, 7 bytes data)
+        response_data = self._send_command_with_payload(command, payload_out)
+        
+        if len(response_data) < 7:
+           raise ValueError('Response payload does not have the expected number of values')
+
+        #parse the response data
+        # Temp (1b), IQ (2b), Speed (2b), Encoder (2b)
+        temp = struct.unpack('<b', bytes([response_data[0]]))[0]
+        iq_raw = int.from_bytes(response_data[1:3], byteorder='little', signed=True)
+        speed_raw = int.from_bytes(response_data[3:5], byteorder='little', signed=True)
+        encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=True)
+
+        #convert to human readable
+        iq_amps = (iq_raw/2048.0) * 33.0 #amps
+
+        #output speed feedback
+        output_speed_feedback = speed_raw / self.REDUCTION_RATIO
+
+        return {
+            "temp_c": temp,
+            "torque_current_amps": round(iq_amps, 2),
+            "output_speed_dps": round(output_speed_feedback, 2),
+            "encoder_position": encoder_raw
+            }
+
+
+    def get_single_loop_angle(self, command = 0x94):
+        # This returns the angle only in the 0 to 360 degree range. 
+        # If you need unbounded position of the motor, use get_multi_loop_angle
 
         #payload = self._query_motor(command=command)
         payload = self._send_command_with_payload(command=command)
         raw_value = int.from_bytes(payload, byteorder='little', signed=True)
         return raw_value * self.ENCODER_RES_DEG/self.REDUCTION_RATIO
+
+    def get_multi_loop_angle(self, command = 0x92):
+
+        # This returns unbounded position of the motor. 
+        payload = self._send_command_with_payload(command=command)
+        if not len(payload) == 8:
+            raise ValueError('Incorrect number of bytes received. Check motor connection')
+        raw_angle = struct.unpack('<q', payload)[0]
+        output_shaft_angle = (raw_angle * 0.01) / self.REDUCTION_RATIO
+        return round(output_shaft_angle, 3) #resolution is 0.01 degrees.
+
 
     def get_motor_status(self, command=0x9A):
         
@@ -151,6 +211,27 @@ class MotorDriver:
             "is_healthy": error_byte == 0
         }
 
+    def get_motor_status2(self, command = 0x9C):
+
+        #this one returns more available data by calling two status requests
+        multi_loop_angle = self.get_multi_loop_angle()
+
+        #get the current motor status
+        status_payload = self._send_command_with_payload(command)
+        if not len(status_payload) == 7:
+            raise ValueError('Incorrect number of bytes received. Check motor connection')
+
+        temp = struct.unpack('<b', bytes([status_payload[0]]))[0]
+        iq_raw = int.from_bytes(status_payload[1:3], byteorder='little', signed=True)
+        speed_raw = int.from_bytes(status_payload[3:5], byteorder='little', signed=True)
+
+        return {
+            "timestamp": time.time(),
+            "angle_deg": round(multi_loop_angle, 3),
+            "velocity_dps": round(speed_raw / self.REDUCTION_RATIO, 2),
+            "torque_amps": round((iq_raw / 2048.0) * 33.0, 3),
+            "temp_c": temp
+        }
 
 if __name__ == '__main__':
 
@@ -160,21 +241,39 @@ if __name__ == '__main__':
         motor_status = motor_driver.get_motor_status()
         print('Motor status:', motor_status)
 
-        angle = motor_driver.get_current_single_loop_angle()
-        print(f'Current single rotation angle: {angle: 0.3f}')
+        angle = motor_driver.get_single_loop_angle()
+        print(f'Current single rotation angle: {angle: 0.3f} degrees')
+
+        angle = motor_driver.get_multi_loop_angle()
+        print(f'current multi loop rotation angle: {angle: 0.3f} degrees')
+
+        motor_status2 = motor_driver.get_motor_status2()
+        print(motor_status2)
 
         if motor_status['is_healthy']:
-            input('Will try to rotate the motor at a constant speed. Press ENTER to continue...')
+            input('Will try to rotate the motor. Press ENTER to continue...')
             
             #enable to motor
             motor_driver.enable_motor()
 
-            #spin the motor
-            rot_speed = -150.0
+            # #spin the motor at a constant rate
+            rot_speed = 360.0
             print(f'Spinning the motor at {rot_speed} degrees per second.')
             response = motor_driver.set_speed(rot_speed)
             print(response)
-            time.sleep(10)
+            time.sleep(2)
+
+            target_position = -120
+            print(f'Moving the motor to postion: {target_position} degrees')
+            response = motor_driver.set_position(target_position)
+            print(response)
+            time.sleep(0.01)
+            while True:
+                motor_status2 = motor_driver.get_motor_status2()
+                print(motor_status2)
+                if abs(motor_status2['velocity_dps']) < 0.001: #break out if the motor stops
+                    break
+                time.sleep(0.01)        
 
             #send stop
             motor_driver.stop_motor()
@@ -185,3 +284,7 @@ if __name__ == '__main__':
 
     except Exception as e:
         print(f'Exception: {e}')
+
+    finally:
+        #always stop the motor when an exception is raised
+        motor_driver.stop_motor()
