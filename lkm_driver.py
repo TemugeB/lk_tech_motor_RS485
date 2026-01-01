@@ -252,8 +252,9 @@ if __name__ == '__main__':
         print(motor_status2)
 
         if motor_status['is_healthy']:
-            input('Will try to rotate the motor. Press ENTER to continue...')
-            
+            resp = input('Do you want to try to rotate the motor? Type [yes]:')
+            if not resp == 'yes': quit()
+
             #enable to motor
             motor_driver.enable_motor()
 
