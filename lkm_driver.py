@@ -48,7 +48,7 @@ class MotorDriver:
         #read response
         resp_header = self.serial.read(5)
         if len(resp_header) < 5:
-            raise ValueError('Response length too short. Check connection with motor.')
+            raise ValueError('Motor responded but response length too short. Check connection with motor.')
         
         #get the rest of the data if needed
         d_len = resp_header[3]
@@ -95,8 +95,8 @@ class MotorDriver:
         #send the command to motor
         response_data = self._send_command_with_payload(command, payload_out)
 
-        if not response_data or len(response_data) < 7:
-            raise ValueError(f'Motor responded with fewer bytes than expected. {response_data}')
+        if not len(response_data) == 7:
+            raise ValueError('Incorrect number of bytes received. Check motor connection. Or check manual for expected number of response bytes.')
         
         #parse the response data
         # Temp (1b), IQ (2b), Speed (2b), Encoder (2b)
@@ -140,8 +140,8 @@ class MotorDriver:
         # send and receive response (13 bytes total, 7 bytes data)
         response_data = self._send_command_with_payload(command, payload_out)
         
-        if len(response_data) < 7:
-           raise ValueError('Response payload does not have the expected number of values')
+        if not len(response_data) == 7:
+            raise ValueError('Incorrect number of bytes received. Check motor connection. Or check manual for expected number of response bytes.')
 
         #parse the response data
         # Temp (1b), IQ (2b), Speed (2b), Encoder (2b)
@@ -178,7 +178,7 @@ class MotorDriver:
         # This returns unbounded position of the motor. 
         payload = self._send_command_with_payload(command=command)
         if not len(payload) == 8:
-            raise ValueError('Incorrect number of bytes received. Check motor connection')
+            raise ValueError('Incorrect number of bytes received. Check motor connection. Or check manual for expected number of response bytes.')
         raw_angle = struct.unpack('<q', payload)[0]
         output_shaft_angle = (raw_angle * 0.01) / self.REDUCTION_RATIO
         return round(output_shaft_angle, 3) #resolution is 0.01 degrees.
@@ -219,7 +219,7 @@ class MotorDriver:
         #get the current motor status
         status_payload = self._send_command_with_payload(command)
         if not len(status_payload) == 7:
-            raise ValueError('Incorrect number of bytes received. Check motor connection')
+            raise ValueError('Incorrect number of bytes received. Check motor connection. Or check manual for expected number of response bytes.')
 
         #unpack
         temp = struct.unpack('<b', bytes([status_payload[0]]))[0]
@@ -236,6 +236,7 @@ class MotorDriver:
 
 if __name__ == '__main__':
 
+    #driver. See initializer for default values
     motor_driver = MotorDriver()
 
     try:
@@ -252,7 +253,7 @@ if __name__ == '__main__':
         print(motor_status2)
 
         if motor_status['is_healthy']:
-            resp = input('Do you want to try to rotate the motor? Type [yes]:')
+            resp = input('Do you want to try to rotate the motor? Type [yes]: ')
             if not resp == 'yes': quit()
 
             #enable to motor
