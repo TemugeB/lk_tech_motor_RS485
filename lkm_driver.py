@@ -21,7 +21,7 @@ class MotorDriver:
 
         #attempt to connect to the motor via serial
         try:
-            self.serial = serial.Serial(self.SERIAL_PORT, self.BAUDRATE, timeout = 0.1)
+            self.serial = serial.Serial(self.SERIAL_PORT, self.BAUDRATE, timeout = 0.05)
             self.serial.reset_input_buffer()
         except Exception as e:
             print(f'Exception: {e}')
@@ -103,7 +103,7 @@ class MotorDriver:
         temp = struct.unpack('<b', bytes([response_data[0]]))[0]
         iq_raw = int.from_bytes(response_data[1:3], byteorder='little', signed=True)
         speed_raw = int.from_bytes(response_data[3:5], byteorder='little', signed=True)
-        encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=True)
+        encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=False)
 
         #convert to human readable
         iq_amps = (iq_raw/2048.0) * 33.0 #amps
@@ -148,7 +148,7 @@ class MotorDriver:
         temp = struct.unpack('<b', bytes([response_data[0]]))[0]
         iq_raw = int.from_bytes(response_data[1:3], byteorder='little', signed=True)
         speed_raw = int.from_bytes(response_data[3:5], byteorder='little', signed=True)
-        encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=True)
+        encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=False)
 
         #convert to human readable
         iq_amps = (iq_raw/2048.0) * 33.0 #amps
@@ -221,6 +221,7 @@ class MotorDriver:
         if not len(status_payload) == 7:
             raise ValueError('Incorrect number of bytes received. Check motor connection')
 
+        #unpack
         temp = struct.unpack('<b', bytes([status_payload[0]]))[0]
         iq_raw = int.from_bytes(status_payload[1:3], byteorder='little', signed=True)
         speed_raw = int.from_bytes(status_payload[3:5], byteorder='little', signed=True)
@@ -257,17 +258,21 @@ if __name__ == '__main__':
             motor_driver.enable_motor()
 
             # #spin the motor at a constant rate
-            rot_speed = 360.0
+            rot_speed = 100.0
             print(f'Spinning the motor at {rot_speed} degrees per second.')
             response = motor_driver.set_speed(rot_speed)
             print(response)
-            time.sleep(2)
 
-            target_position = -120
+            #rotate the motor for 2 seconds
+            time.sleep(2)
+            motor_driver.stop_motor()
+
+            # move to a target position
+            target_position = -120 #in degrees
             print(f'Moving the motor to postion: {target_position} degrees')
-            response = motor_driver.set_position(target_position)
-            print(response)
-            time.sleep(0.01)
+            response = motor_driver.set_position(target_angle_deg=-120, max_speed_dps=50)
+
+            #get feedback while the motor turns.
             while True:
                 motor_status2 = motor_driver.get_motor_status2()
                 print(motor_status2)
@@ -286,5 +291,5 @@ if __name__ == '__main__':
         print(f'Exception: {e}')
 
     finally:
-        #always stop the motor when an exception is raised
+        #always stop the motor when an exception is raised. This should include Control + C terminations.
         motor_driver.stop_motor()
