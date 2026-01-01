@@ -288,6 +288,10 @@ if __name__ == '__main__':
             #servo off?
             #motor_driver.shutdown_motor()
 
+        else:
+            resp = input('Motor is not healthy. Try to reset errors? Type [yes]: ')
+            if resp == 'yes':
+                motor_driver.clear_errors()
 
     except Exception as e:
         print(f'Exception: {e}')
