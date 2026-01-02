@@ -112,6 +112,7 @@ class MotorDriver:
         output_speed_feedback = speed_raw / self.REDUCTION_RATIO
 
         return {
+            "timestamp": time.time(),
             "temp_c": temp,
             "torque_current_amps": round(iq_amps, 2),
             "output_speed_dps": round(output_speed_feedback, 2),
@@ -157,6 +158,7 @@ class MotorDriver:
         output_speed_feedback = speed_raw / self.REDUCTION_RATIO
 
         return {
+            "timestamp": time.time(),
             "temp_c": temp,
             "torque_current_amps": round(iq_amps, 2),
             "output_speed_dps": round(output_speed_feedback, 2),
@@ -203,6 +205,7 @@ class MotorDriver:
         over_temp = bool(error_byte & 0x08)
 
         return {
+            "timestamp": time.time(),
             "temp_c": temp,
             "voltage_v": voltage,
             #"error_raw": error_byte,
