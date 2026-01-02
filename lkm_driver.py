@@ -104,6 +104,7 @@ class MotorDriver:
         iq_raw = int.from_bytes(response_data[1:3], byteorder='little', signed=True)
         speed_raw = int.from_bytes(response_data[3:5], byteorder='little', signed=True)
         encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=False)
+        single_loop_angle = (encoder_raw / 65536.0) * 360.0
 
         #convert to human readable
         iq_amps = (iq_raw/2048.0) * 33.0 #amps
@@ -116,7 +117,8 @@ class MotorDriver:
             "temp_c": temp,
             "torque_current_amps": round(iq_amps, 2),
             "output_speed_dps": round(output_speed_feedback, 2),
-            "encoder_position": encoder_raw
+            "encoder_position": encoder_raw,
+            "single_loop_angle": round(single_loop_angle, 2)
             }
 
     def set_position(self, target_angle_deg, max_speed_dps = 100, command = 0xA4):
@@ -150,6 +152,7 @@ class MotorDriver:
         iq_raw = int.from_bytes(response_data[1:3], byteorder='little', signed=True)
         speed_raw = int.from_bytes(response_data[3:5], byteorder='little', signed=True)
         encoder_raw = int.from_bytes(response_data[5:7], byteorder='little', signed=False)
+        single_loop_angle = (encoder_raw / 65536.0) * 360.0
 
         #convert to human readable
         iq_amps = (iq_raw/2048.0) * 33.0 #amps
@@ -162,7 +165,8 @@ class MotorDriver:
             "temp_c": temp,
             "torque_current_amps": round(iq_amps, 2),
             "output_speed_dps": round(output_speed_feedback, 2),
-            "encoder_position": encoder_raw
+            "encoder_position": encoder_raw,
+            "single_loop_angle": round(single_loop_angle, 2)
             }
 
 
