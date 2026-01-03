@@ -56,3 +56,14 @@ Likely the signal degraded. Ensure you have the terminal resistors connected. On
 ### Other Tips
 
 You should connect the termination resistors to ensure signal integrity. On the MG8008 motor, the termination resistor is engaged by flipping the 4th switch on the back. I also connect an additional resistor on the RS485 adapter side. The ``docs`` folder contain relevant data for the MG8008 motor. But I think this driver will work with other similar LK-Tech motors with minimal modification. 
+
+### Latency
+
+By default, linux serial does not use ``low_latency`` mode. If you need very low latency, set serial to low latency mode and increase the baud rate. In my case, at 2Mbps baud rate and low latency mode, the motor was respondining within 2ms. 
+
+```bash
+setserial /dev/ttyUSB0 low_latency
+```
+
+Reduce ``timeout`` to 0.005 in the line below.
+https://github.com/TemugeB/lk_tech_motor_RS485/blob/f912b9a11ca32a2d20938731d28228df7f94b08c/lkm_driver.py#L24
