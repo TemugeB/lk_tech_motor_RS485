@@ -241,6 +241,62 @@ class MotorDriver:
             "temp_c": temp
         }
 
+
+    def get_pid_parameters(self, command=0x30):
+            """
+            CMD 0x30: Reads the PI gains for all control loops.
+            
+            The motor responds with 12 bytes total. 
+            The 6 bytes of payload contain Kp and Ki for:
+            1. Position (Angle) ring
+            2. Speed ring
+            3. Torque (Current) ring
+            """
+            # The command sends 0 bytes of payload (DATA[3] = 0x00)
+            # _send_command_with_payload handles header construction and checksums
+            payload = self._send_command_with_payload(command)
+            
+            # According to the manual, the driver responds with a 6-byte payload
+            if len(payload) != 6:
+                raise ValueError(f"Expected 6 bytes of PID payload, got {len(payload)}")
+
+            return {
+                "angle_kp": payload[0], # DATA[5]
+                "angle_ki": payload[1], # DATA[6]
+                "speed_kp": payload[2], # DATA[7]
+                "speed_ki": payload[3], # DATA[8]
+                "iq_kp":    payload[4], # DATA[9]
+                "iq_ki":    payload[5]  # DATA[10]
+            }
+
+
+    def write_pid_to_ram(self, angle_kp, angle_ki, speed_kp, speed_ki, iq_kp, iq_ki, command=0x31):
+        """
+        CMD 0x31: Write PID parameters to RAM. 
+        Parameters become invalid when power is turned off.
+        """
+        # Pack 6 parameters as unsigned bytes.
+        payload = struct.pack('BBBBBB', angle_kp, angle_ki, speed_kp, speed_ki, iq_kp, iq_ki)
+        
+        # Driver reply is consistent with received parameters.
+        response_data = self._send_command_with_payload(command, payload)
+        return len(response_data) == 6
+
+
+    def write_pid_to_rom(self, angle_kp, angle_ki, speed_kp, speed_ki, iq_kp, iq_ki, command=0x32):
+        """
+        CMD 0x32: Write PID parameters to ROM.
+        Parameters remain valid after power off.
+        """
+        # Data format is identical to the RAM write command.
+        payload = struct.pack('BBBBBB', angle_kp, angle_ki, speed_kp, speed_ki, iq_kp, iq_ki)
+        
+        # Driver reply is consistent with received parameters.
+        response_data = self._send_command_with_payload(command, payload)
+        return len(response_data) == 6
+
+
+
 if __name__ == '__main__':
 
     #driver. See initializer for default values
